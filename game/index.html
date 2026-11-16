@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>LANTERN QUAY — 5v5 tactical FPS</title>
+<style>
+  html,body{margin:0;padding:0;width:100%;height:100%;overflow:hidden;background:#0b1026;font-family:Arial,Helvetica,sans-serif;color:#e8ecf4}
+  #game{position:fixed;inset:0}
+  #game canvas{display:block}
+  .panel{background:rgba(8,12,26,.72);border:1px solid rgba(255,176,66,.35);border-radius:6px}
+  /* top bar */
+  #topbar{position:fixed;top:10px;left:50%;transform:translateX(-50%);display:flex;gap:14px;align-items:center;padding:6px 16px;z-index:5}
+  #timer{font-size:26px;font-weight:900;color:#ffd27a;min-width:64px;text-align:center}
+  #score{font-size:17px;font-weight:900;letter-spacing:1px}
+  #round{font-size:11px;color:#9fb0d0;letter-spacing:1px}
+  #plan{position:fixed;top:64px;left:50%;transform:translateX(-50%);padding:5px 14px;font-size:13px;font-weight:900;letter-spacing:1px;color:#ffd27a;display:none;z-index:5}
+  #objective{position:fixed;top:96px;left:50%;transform:translateX(-50%);padding:4px 12px;font-size:12px;font-weight:700;letter-spacing:1px;color:#ffd27a;display:none;z-index:5}
+  /* bottom-left vitals */
+  #vitals{position:fixed;left:14px;bottom:14px;width:230px;padding:10px 12px;z-index:5}
+  #vitals .row{display:flex;justify-content:space-between;font-size:12px;font-weight:700;margin-bottom:3px}
+  .bar{height:10px;background:#141a2c;border-radius:3px;overflow:hidden;margin-bottom:6px}
+  .bar i{display:block;height:100%;background:#7fd67a;transition:width .15s}
+  #armourBar{background:#4fc3d9}
+  #cash{font-size:19px;font-weight:900;color:#7fd67a}
+  /* bottom-right weapon */
+  #weapon{position:fixed;right:14px;bottom:14px;text-align:right;z-index:5}
+  #ammo{font-size:42px;font-weight:900;line-height:1}
+  #ammoReserve{font-size:18px;color:#9fb0d0}
+  #weaponName{font-size:13px;font-weight:900;letter-spacing:1px;color:#ffd27a}
+  #slots{margin-top:6px;display:flex;gap:5px;justify-content:flex-end}
+  #nades{margin-top:5px;display:flex;gap:5px;justify-content:flex-end}
+  .slot{padding:3px 7px;font-size:10px;font-weight:700;background:rgba(8,12,26,.72);border:1px solid rgba(255,255,255,.18);border-radius:4px;color:#c8d2e8}
+  .slot.cur{border-color:#ffb042;color:#ffd27a}
+  .slot.empty{opacity:.45}
+  /* crosshair + hitmarker */
+  #crosshair{position:fixed;left:50%;top:50%;width:0;height:0;--gap:6px;z-index:4;pointer-events:none}
+  #crosshair i{position:absolute;background:#fff;box-shadow:0 0 3px #000}
+  #crosshair .t{left:-1px;top:calc(-14px - var(--gap));width:2px;height:10px}
+  #crosshair .b{left:-1px;top:calc(4px + var(--gap));width:2px;height:10px}
+  #crosshair .l{top:-1px;left:calc(-14px - var(--gap));width:10px;height:2px}
+  #crosshair .r{top:-1px;left:calc(4px + var(--gap));width:10px;height:2px}
+  #crosshair .dot{left:-1.5px;top:-1.5px;width:3px;height:3px;border-radius:50%}
+  #hitmarker{position:fixed;left:50%;top:50%;width:26px;height:26px;margin:-13px 0 0 -13px;opacity:0;z-index:4;pointer-events:none}
+  #hitmarker:before,#hitmarker:after{content:'';position:absolute;left:12px;top:0;width:2px;height:26px;background:#fff;box-shadow:0 0 4px #000}
+  #hitmarker:before{transform:rotate(45deg)}
+  #hitmarker:after{transform:rotate(-45deg)}
+  #hitmarker.hs:before,#hitmarker.hs:after{background:#ff5a4e}
+  #dmgNums{position:fixed;inset:0;pointer-events:none;z-index:4}
+  .dmg{position:absolute;font-size:15px;font-weight:900;color:#fff;text-shadow:0 0 4px #000;animation:rise .9s forwards}
+  .dmg.hs{color:#ff5a4e;font-size:18px}
+  @keyframes rise{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(-34px)}}
+  /* feeds */
+  #killfeed{position:fixed;right:14px;top:110px;width:300px;text-align:right;z-index:5;pointer-events:none}
+  .kf{font-size:13px;font-weight:700;background:rgba(8,12,26,.72);border:1px solid rgba(255,255,255,.15);border-radius:4px;padding:4px 9px;margin-bottom:4px;display:inline-block}
+  .kf.hs{border-color:#ff5a4e;color:#ffb0a8}
+  #radio{position:fixed;left:14px;top:110px;width:330px;z-index:5;pointer-events:none}
+  .radio-line{font-size:13px;background:rgba(8,12,26,.72);border-left:3px solid #ffb042;border-radius:4px;padding:4px 9px;margin-bottom:4px}
+  /* minimap */
+  #minimap{position:fixed;right:14px;top:14px;border:1px solid rgba(255,176,66,.4);border-radius:6px;background:rgba(8,12,26,.8);z-index:5}
+  /* banners */
+  #roundBanner{position:fixed;left:50%;top:34%;transform:translate(-50%,-50%);text-align:center;display:none;z-index:8;pointer-events:none}
+  #bannerTitle{font-size:52px;font-weight:900;letter-spacing:4px;color:#ffd27a;text-shadow:0 3px 18px #000}
+  #bannerSub{font-size:16px;font-weight:700;color:#e8ecf4;text-shadow:0 2px 8px #000;margin-top:6px}
+  #plantBar{position:fixed;left:50%;bottom:170px;transform:translateX(-50%);width:280px;display:none;z-index:6;text-align:center}
+  #plantBar .track{height:12px;background:#141a2c;border:1px solid #ffb042;border-radius:4px;overflow:hidden}
+  #plantFill{display:block;height:100%;width:0%;background:#ffb042}
+  #plantLabel{font-size:12px;font-weight:900;letter-spacing:2px;margin-top:4px;color:#ffd27a}
+  #flashOverlay{position:fixed;inset:0;background:#fff;opacity:0;pointer-events:none;z-index:9;transition:opacity .12s}
+  #dmgVignette{position:fixed;inset:0;pointer-events:none;z-index:7;opacity:0;background:radial-gradient(ellipse at center,transparent 55%,rgba(255,30,20,.55) 100%);transition:opacity .2s}
+  #hint{position:fixed;left:50%;bottom:8px;transform:translateX(-50%);font-size:11px;color:#9fb0d0;z-index:5;pointer-events:none}
+  /* buy menu */
+  #buyMenu{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:520px;padding:18px;display:none;z-index:10}
+  #buyMenu h2{margin:0 0 2px;font-size:20px;letter-spacing:2px;color:#ffd27a}
+  #buyMenu p{margin:0 0 12px;font-size:12px;color:#9fb0d0}
+  #buyCash{font-size:20px;font-weight:900;color:#7fd67a}
+  #buyGrid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+  .buy-item{display:flex;flex-direction:column;gap:2px;text-align:left;background:#141a2c;border:1px solid rgba(255,176,66,.4);border-radius:6px;color:#e8ecf4;padding:10px;cursor:pointer;font-family:inherit}
+  .buy-item:hover{border-color:#ffb042;background:#1c2436}
+  .buy-item b{font-size:13px;letter-spacing:1px}
+  .buy-item span{font-size:11px;color:#9fb0d0}
+  .buy-item i{font-style:normal;font-weight:900;color:#7fd67a}
+  .buy-item.owned{opacity:.6}
+  .buy-item.poor i{color:#ff5a4e}
+  /* start screen */
+  #startScreen{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(180deg,rgba(6,9,20,.82),rgba(11,16,38,.88));z-index:20;text-align:center}
+  #startScreen h1{font-size:64px;letter-spacing:8px;margin:0;color:#ffd27a;text-shadow:0 4px 30px rgba(255,154,30,.4)}
+  #startScreen h2{font-size:15px;letter-spacing:4px;color:#7fd4e8;margin:8px 0 24px}
+  #startScreen p{font-size:14px;color:#c8d2e8;max-width:560px;line-height:1.7}
+  #playBtn{margin-top:26px;font-size:19px;font-weight:900;letter-spacing:3px;padding:14px 44px;background:#ffb042;color:#14213d;border:none;border-radius:8px;cursor:pointer}
+  #playBtn:hover{background:#ffc46b}
+  #startScreen .keys{margin-top:22px;font-size:12px;color:#9fb0d0;line-height:1.9}
+  /* scoreboard */
+  #scoreboard{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);width:480px;padding:16px;display:none;z-index:11}
+  #scoreboard h3{margin:0 0 10px;letter-spacing:2px;color:#ffd27a}
+  .sb-row{display:flex;justify-content:space-between;font-size:13px;padding:4px 6px;border-bottom:1px solid rgba(255,255,255,.08)}
+  .sb-row.watch{color:#9fd4e0}
+  .sb-row.ember{color:#ffcf9a}
+</style>
+<script type="importmap">
+{"imports":{"three":"./vendor/three/three.module.min.js"}}
+</script>
+</head>
+<body>
+<div id="game"></div>
+
+<div id="topbar" class="panel"><span id="timer">1:40</span><span id="score">EMBER 0 — 0 WATCH</span><span id="round">ROUND 1 · FIRST TO 5</span></div>
+<div id="plan" class="panel"></div>
+<div id="objective" class="panel"></div>
+<canvas id="minimap" width="220" height="142"></canvas>
+
+<div id="vitals" class="panel">
+  <div class="row"><span>HEALTH</span><span id="healthNum">100</span></div>
+  <div class="bar"><i id="healthBar" style="width:100%"></i></div>
+  <div class="row"><span>ARMOUR</span><span id="armourNum">0</span></div>
+  <div class="bar"><i id="armourBar" style="width:0%"></i></div>
+  <div class="row"><span>CASH</span><span id="cash">$800</span></div>
+</div>
+
+<div id="weapon">
+  <div><span id="ammo">12</span><span id="ammoReserve">/ 36</span></div>
+  <div id="weaponName">VK-9 SIDEARM</div>
+  <div id="slots"></div>
+  <div id="nades"></div>
+</div>
+
+<div id="crosshair"><i class="t"></i><i class="b"></i><i class="l"></i><i class="r"></i><i class="dot"></i></div>
+<div id="hitmarker"></div>
+<div id="dmgNums"></div>
+<div id="killfeed"></div>
+<div id="radio"></div>
+
+<div id="plantBar"><div class="track"><i id="plantFill"></i></div><div id="plantLabel"></div></div>
+<div id="roundBanner"><div id="bannerTitle"></div><div id="bannerSub"></div></div>
+<div id="flashOverlay"></div>
+<div id="dmgVignette"></div>
+<div id="hint">WASD move · Mouse aim · Click shoot · R reload · B buy · 1–5 weapons · 6/7/8 grenades · E plant/defuse · Ctrl crouch · Tab score</div>
+
+<div id="buyMenu" class="panel">
+  <h2>BUY — LANTERN QUAY ARMOURY</h2>
+  <p>Buy phase — spend your round money. Cash: <span id="buyCash">$800</span></p>
+  <div id="buyGrid"></div>
+</div>
+
+<div id="scoreboard" class="panel">
+  <h3>SCOREBOARD — LANTERN QUAY</h3>
+  <div id="sbBody"></div>
+</div>
+
+<div id="startScreen">
+  <h1>LANTERN QUAY</h1>
+  <h2>5v5 TACTICAL FPS · EMBER CO-OP vs HARBOUR WATCH</h2>
+  <p>Night falls on the harbour. Plant the charge at <b>Lantern Quay</b> or the
+  <b>Fish Hall</b> — or hold the quay and defuse it. Your team plans every
+  round, your bots call out every contact. First to 5 rounds takes the quay.</p>
+  <button id="playBtn">▶ &nbsp;DEPLOY</button>
+  <div class="keys">WASD move · SHIFT walk · CTRL crouch · Mouse aim · Click shoot · R reload<br>
+  B buy menu · 1–5 weapons · 6 frag / 7 flash / 8 smoke · E plant / defuse · TAB scoreboard</div>
+</div>
+
+<script type="module" src="./src/main.js"></script>
+</body>
+</html>
